@@ -6,7 +6,7 @@ import numpy as np
 
 class TLWE():
     def __init__(self, plain_text, mu, n, sigma):
-        self.plain_text = plain_text
+        self.plain_text = plain_text #平文が文字列だった時の話
         self.mu = mu
         self.n = n
         self.sigma = sigma
@@ -18,7 +18,7 @@ class TLWE():
 
     def generate_public_key(self, n):
         random_from_os = random.SystemRandom()
-        return [random_from_os.random() for i in range(n)]
+        return [self.float_to_torus32(random_from_os.random()) for i in range(n)]
 
     def generate_secret_key(self, n):
         random_from_os = random.SystemRandom()
@@ -27,9 +27,8 @@ class TLWE():
     def generate_error(self,sigma):
         #モジューラ正規分布
         random_from_os = random.SystemRandom()
-        random_normal = random_from_os.normalvariate(0, sigma)
-        print(random_normal)
-        return random_normal % 1
+        random_normal = random_from_os.normalvariate(0, sigma) 
+        return self.float_to_torus32(random_normal)
 
     def encrypt_calc(self, plain_text, secret_key):
         cipher_vector = np.empty((len(plain_text), self.n + 1))
@@ -37,15 +36,16 @@ class TLWE():
             public_key = self.generate_public_key(self.n)
             error = self.generate_error(self.sigma)
             print(error)
-            cipher_text = np.dot(public_key, secret_key) + self.mu * (2 * self.plain_text[index] - 1) + error
+            cipher_text = np.dot(public_key, secret_key) + self.float_to_torus32(self.mu) * (2 * self.plain_text[index] - 1) + error
             cipher_vector[index] = np.append(public_key, cipher_text)
         return cipher_vector
 
     def decrypt_calc(self, cipher_vector, secret_key):
         decrypted_text = np.empty((len(self.plain_text)))
         for index in range(len(self.plain_text)):
-            decrypted_text[index] = (1 + np.sign(cipher_vector[index][-1] - np.dot(cipher_vector[index][:-1], secret_key))) / 2
-
+            decrypted_text[index] = (1 + np.sign(np.int32(cipher_vector[index][-1] - np.dot(cipher_vector[index][:-1], secret_key)))) / 2
+            #なんでint32を取ったか、疑問解消できてない。
+            
         return np.uint32(decrypted_text)
 
     def float_to_torus32(self, d):
