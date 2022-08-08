@@ -15,7 +15,7 @@ class TLWE():
         self.secret_key = self.generate_secret_key(self.n)
         self.cipher_vector = self.encrypt_calc(self.plain_text, self.secret_key)
         self.decrypt_text = self.decrypt_calc(self.cipher_vector, self.secret_key)
-        
+
     def generate_public_key(self, n):
         random_from_os = random.SystemRandom()
         return [random_from_os.random() for i in range(n)]
@@ -27,13 +27,16 @@ class TLWE():
     def generate_error(self,sigma):
         #モジューラ正規分布
         random_from_os = random.SystemRandom()
-        return random_from_os.normalvariate(0, sigma) % 1
+        random_normal = random_from_os.normalvariate(0, sigma)
+        print(random_normal)
+        return random_normal % 1
 
     def encrypt_calc(self, plain_text, secret_key):
         cipher_vector = np.empty((len(plain_text), self.n + 1))
         for index in range(len(self.plain_text)):
             public_key = self.generate_public_key(self.n)
             error = self.generate_error(self.sigma)
+            print(error)
             cipher_text = np.dot(public_key, secret_key) + self.mu * (2 * self.plain_text[index] - 1) + error
             cipher_vector[index] = np.append(public_key, cipher_text)
         return cipher_vector
@@ -42,8 +45,9 @@ class TLWE():
         decrypted_text = np.empty((len(self.plain_text)))
         for index in range(len(self.plain_text)):
             decrypted_text[index] = (1 + np.sign(cipher_vector[index][-1] - np.dot(cipher_vector[index][:-1], secret_key))) / 2
-        return decrypted_text
-    
+
+        return np.uint32(decrypted_text)
+
     def float_to_torus32(self, d):
         return np.uint32((d % 1) * 2 ** 32)
         """
@@ -56,7 +60,7 @@ class TLWE():
         →これで、整数部分に小数部分が押し出される。
         4. 加算、乗算したときも、整数部分は押し出されて関係なくなるからOK
         """
-        
+
 def main():
     mu = 2 ** -3
     n = 586
