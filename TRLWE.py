@@ -43,7 +43,6 @@ class TRLWE():
 
         cipher_text = self.float_to_torus32(public_secret_polymul) + self.float_to_torus32(mu) * (2 * plain_text - 1) + error
         cipher_vector = np.vstack((public_key, cipher_text))
-        print(f"{error}")
 
         return cipher_vector
 
