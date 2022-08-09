@@ -30,7 +30,7 @@ class TRLWE():
         #モジューラ正規分布
         random_from_os = random.SystemRandom()
         random_normal = random_from_os.normalvariate(0, sigma)
-        return self.float_to_torus32(random_normal)
+        return np.array([self.float_to_torus32(random_normal)])
 
     def encrypt_calc(self, plain_text, secret_key, n, sigma, k, mu):
         cipher_vector = np.empty((k, n-1))
@@ -44,6 +44,7 @@ class TRLWE():
         cipher_text = self.float_to_torus32(public_secret_polymul) + self.float_to_torus32(mu) * (2 * plain_text - 1) + error
         cipher_vector = np.vstack((public_key, cipher_text))
         print(f"{error}")
+
         return cipher_vector
 
     def decrypt_calc(self, cipher_vector, secret_key, k, n):
@@ -54,6 +55,7 @@ class TRLWE():
             public_secret_polymul += self.polymul(n, cipher_vector[i], secret_key[i])         
         
         decrypted_text = (1 + np.sign(np.int32(cipher_vector[-1] - self.float_to_torus32(public_secret_polymul)))) / 2
+
 
         return np.uint32(decrypted_text)
 
@@ -85,7 +87,8 @@ class TRLWE():
         res = np.zeros(n, dtype = np.int64)
         for i in range (n):
             if i < len(plain_text):
-                res[i] += self.plain_text[i]
+                res[i] += plain_text[i]
+                
             else:
                 if i > len(plain_text):
                     res[i] += 0
@@ -99,6 +102,7 @@ def main():
     sigma = 0.0000000342338787018369
     k = 2
     plain_text = [0]
+
     
     tlwe = TRLWE(plain_text, mu, n, sigma, k)
     tlwe.exec()
@@ -106,6 +110,7 @@ def main():
     #print(f"error:\n{tlwe.error}")
     print(f"plain text:\n{tlwe.plain_text}")
     print(f"decrypt text:\n{tlwe.decrypt_text[:len(plain_text)]}")
+
     
 
 
