@@ -8,7 +8,7 @@ class ExternalProduct():
     def __init__(self, cipher_trlwe, mu, Bgbit, l, zero_mu, zero_n, zero_sigma, zero_k):
         self.cipher_trlwe = cipher_trlwe
         self.cipher_trlwe_length = cipher_trlwe.shape[0]
-        self.mu = mu
+        self.mu = np.array(mu)
         self.Bgbit = Bgbit
         self.Bg = 2 ** Bgbit
         self.l = l
@@ -20,20 +20,22 @@ class ExternalProduct():
         
     def exec(self):
         self.decomposed_trlwe = self.decompose_trlwe(self.cipher_trlwe, self.Bgbit, self.l)
-        self.zero_trlwe = TRLWE(0, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
+        zero_trlwe = TRLWE([0], self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length-1)
+        zero_trlwe.exec()
+        self.zero_trlwe_vector = zero_trlwe.cipher_vector
         self.mu_matrix = self.generate_mu_matrix(self.mu, self.Bg, self.cipher_trlwe_length, self.l)
-        self.trgsw_matrix = self.trgsw(self.zero_trlwe, self.mu_matrix)
+        self.trgsw_matrix = self.trgsw(self.zero_trlwe_vector, self.mu_matrix)
         self.encrypted_text = self.exec_calc(self.Bg, self.decomposed_trlwe, self.trgsw_matrix)
     
     def decomposition(self, a, l, Bgbit):
         round_offset = 1 << (32 - l * Bgbit -1)
-        decomposed_a_slip = np.empty((l - 1, len(a)-1))
-        decomposed_a = np.empty((l - 1, len(a)-1))
-        for j in range(1, l + 1):
-            for i in range(len(a)):
+        decomposed_a_slip = np.empty((l , len(a)))
+        decomposed_a = np.empty((l , len(a)))
+        for i in range(l):
+            for j in range(len(a)):
                 decomposed_a_slip[i][j] = (a[j] + round_offset) >> (32 - Bgbit * i) & (2 ** Bgbit - 1)
-        for j in range(1, l + 1):
-            for i in range(len(a)):
+        for i in range(l):
+            for j in range(len(a)):
                 if decomposed_a_slip[i][j] >= 2 ** (Bgbit - 1):
                     decomposed_a[i][j] = decomposed_a_slip[i][j] - 2 ** Bgbit
                     decomposed_a_slip[i-1][j] += 1
@@ -50,22 +52,23 @@ class ExternalProduct():
         return np.array(decomposed_vector)
 
     def generate_mu_matrix(self, mu, Bg, cipher_trlwe_length, l):
-        mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu.shape[1]))
+        mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu.shape[0]))
         mu_Bg_array = np.array([mu / (Bg ** i) for i in range(1,l+1)])
         for i in range(cipher_trlwe_length):
-            mu_matrix[cipher_trlwe_length * i: cipher_trlwe_length * (i + 1)][i][:] = mu_Bg_array
-        
+            mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
         return mu_matrix
     
     def trgsw(self, zero_trlwe, mu_matrix):
-        return zero_trlwe + mu_matrix
+        return zero_trlwe.T.reshape(zero_trlwe.shape[1],zero_trlwe.shape[0], 1) + mu_matrix
     
     def exec_calc(self, Bg, decomposed_trlwe, trgsw):
         trgsw_matrix = []
+        print(trgsw.shape)
         for j in range(trgsw.shape[2]):
             trgsw_vector = np.empty((decomposed_trlwe.shape[1]))
             for i in range(decomposed_trlwe.shape[1]):
-                trgsw_vector += self.polymul(self.decompose_trlwe.shape[1], decomposed_trlwe[i], trgsw[i][j])
+                print(decomposed_trlwe[i].shape)
+                trgsw_vector += self.polymul(decomposed_trlwe.shape[1], decomposed_trlwe[i], trgsw[i][j])
 
             trgsw_matrix.append(trgsw_vector)
         
@@ -88,7 +91,7 @@ class ExternalProduct():
         
         mu_matrix = self.generate_mu_matrix(input, self.Bg, self.cipher_trlwe_length, self.l)
         return self.trgsw((trlwe_one.cipher_vector - trlwe_zero.cipher_vector), mu_matrix) + trlwe_zero.cipher_vector
-        
+
 class TRLWE():
     def __init__(self, plain_text, mu, n, sigma, k):
         self.plain_text = np.array(plain_text)
@@ -187,13 +190,20 @@ def main():
     k = 2
     plain_text = [0]
 
+    mu_vec = [0]
+    Bgbit = 8
+    l = 2
+    trlwe = TRLWE(plain_text, mu, n, sigma, k)
+    trlwe.exec()
     
-    tlwe = TRLWE(plain_text, mu, n, sigma, k)
-    tlwe.exec()
+    external_product = ExternalProduct(trlwe.cipher_vector, mu_vec, Bgbit, l, mu, n, sigma, k)
+    external_product.exec()
+    decrypted_text = trlwe.decrypt_calc(external_product.encrypted_text, trlwe.secret_key, trlwe.k, trlwe.n)
+    
     #print(f"secret key:\n{tlwe.secret_key}")
     #print(f"error:\n{tlwe.error}")
-    print(f"plain text:\n{tlwe.plain_text}")
-    print(f"decrypt text:\n{tlwe.decrypt_text[:len(plain_text)]}")
+    print(f"plain text:\n{trlwe.plain_text}")
+    print(f"decrypt text:\n{decrypted_text}")
 
     
 
