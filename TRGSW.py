@@ -82,8 +82,13 @@ class ExternalProduct():
                     res[i + j - n] -= a[i] * b[j] #次元がn以上の時はk-n次元の係数に係数を引く。
         return res
 
-    def cmux
-    
+    def cmux(self, input):
+        trlwe_zero = TRLWE(0, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
+        trlwe_one = TRLWE(1, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
+        
+        mu_matrix = self.generate_mu_matrix(input, self.Bg, self.cipher_trlwe_length, self.l)
+        return self.trgsw((trlwe_one.cipher_vector - trlwe_zero.cipher_vector), mu_matrix) + trlwe_zero.cipher_vector
+        
 class TRLWE():
     def __init__(self, plain_text, mu, n, sigma, k):
         self.plain_text = np.array(plain_text)
