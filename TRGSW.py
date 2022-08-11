@@ -39,8 +39,8 @@ class TRGSW():
         for i in range(cipher_trlwe_length):
             mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
             
-        print(f"mu matrix:\n{mu_matrix}")
-        return mu_matrix
+        print(f"mu matrix:\n{np.uint32(mu_matrix)}")
+        return np.uint32(mu_matrix)
     
     def trgsw(self, zero_trlwe, mu_matrix):
         return zero_trlwe + mu_matrix
