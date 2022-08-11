@@ -302,8 +302,7 @@ def main():
     l = 2
     
     input_vec = [1]
-    
-    """
+
     trlwe = TRLWE(plain_text, mu, n, sigma, k)
     trlwe.exec()
     
@@ -320,7 +319,7 @@ def main():
     print(f"plain text:\n{trlwe.plain_text}")
     print(f"mu: \n{mu_vec}")
     print(f"decrypt text:\n{decrypted_text[:len(plain_text)]}")
-    """
+    
     trgsw_for_cmux = TRGSW(input_vec, Bgbit,l, mu, n, sigma, k)
     trgsw_for_cmux.exec()
     
@@ -332,5 +331,5 @@ def main():
 
 
 if __name__ == '__main__':
-    for i in range()
-    main()
+    for i in range(10):
+        main()
