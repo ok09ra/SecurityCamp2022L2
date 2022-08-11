@@ -19,11 +19,16 @@ class TRGSW():
         self.k = k
         
     def exec(self):
-        zero_trlwe = TRLWE([0], self.mu, self.l, self.sigma, self.cipher_trlwe_length-1)
-        zero_trlwe.exec()
-        self.zero_trlwe_vector = np.array([zero_trlwe.cipher_vector.T for i in range(self.cipher_trlwe_length)]).reshape(self.l * self.cipher_trlwe_length, self.cipher_trlwe_length, 1)
-        self.mu_matrix = self.generate_mu_matrix(self.mu_vec, self.Bg, self.cipher_trlwe_length, self.l)
-        self.cipher_vector = self.trgsw(self.zero_trlwe_vector, self.mu_matrix)
+        zero_trlwe_vector = []
+        for i in range(self.cipher_trlwe_length):
+            zero_trlwe = TRLWE([0], self.mu, self.l, self.sigma, self.cipher_trlwe_length-1)
+            zero_trlwe.exec_torus()
+            zero_trlwe_vector.append(zero_trlwe.cipher_vector.T)
+        
+        zero_trlwe_vector = np.array(zero_trlwe_vector).reshape(self.l * self.cipher_trlwe_length, self.cipher_trlwe_length, 1)
+        
+        mu_matrix = self.generate_mu_matrix(self.mu_vec, self.Bg, self.cipher_trlwe_length, self.l)
+        self.cipher_vector = self.trgsw(zero_trlwe_vector, mu_matrix)
     
     def generate_mu_matrix(self, mu_vec, Bg, cipher_trlwe_length, l):
         mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu_vec.shape[0]))
@@ -116,6 +121,10 @@ class ExternalProduct():
         mu_matrix = self.generate_mu_matrix(input, self.Bg, self.cipher_trlwe_length, self.l)
         return self.external_product((trlwe_one.cipher_vector - trlwe_zero.cipher_vector), mu_matrix) + trlwe_zero.cipher_vector
 
+class CMUX():
+    def __init__(self, ):
+        return 0
+    
 class TRLWE():
     def __init__(self, plain_text, mu, n, sigma, k):
         self.plain_text = np.array(plain_text)
@@ -128,6 +137,12 @@ class TRLWE():
         converted_plain_text = self.convert_poly(self.plain_text, self.n)
         self.secret_key = self.generate_secret_key(self.n, self.k)
         self.cipher_vector = self.encrypt_calc(converted_plain_text, self.secret_key, self.n, self.sigma, self.k, self.mu)
+        self.decrypt_text = self.decrypt_calc(self.cipher_vector, self.secret_key, self.k, self.n)
+
+    def exec_torus(self):
+        converted_plain_text = self.convert_poly(self.plain_text, self.n)
+        self.secret_key = self.generate_secret_key(self.n, self.k)
+        self.cipher_vector = self.encrypt_calc_torus(converted_plain_text, self.secret_key, self.n, self.sigma, self.k, self.mu)
         self.decrypt_text = self.decrypt_calc(self.cipher_vector, self.secret_key, self.k, self.n)
 
     def generate_public_key(self, n, k):
@@ -158,6 +173,26 @@ class TRLWE():
 
         return cipher_vector
 
+    def encrypt_calc_torus(self, plain_text, secret_key, n, sigma, k, mu):
+        cipher_vector = np.empty((k, n-1))
+
+        public_key = self.generate_public_key(n, k)
+        error = self.generate_error(sigma)
+        public_secret_polymul = np.empty((n))
+        
+        plain_text_torus = []
+        for i in plain_text:
+            plain_text_torus.append(self.float_to_torus32(i))
+        np.array(plain_text_torus)
+        
+        for i in range(k):
+            public_secret_polymul += self.polymul(n, public_key[i], secret_key[i])             
+
+        cipher_text = self.float_to_torus32(public_secret_polymul) + plain_text + error
+        cipher_vector = np.vstack((public_key, cipher_text))
+
+        return cipher_vector
+    
     def decrypt_calc(self, cipher_vector, secret_key, k, n):
         decrypted_text = np.empty((n))
 
