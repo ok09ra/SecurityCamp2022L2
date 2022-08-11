@@ -26,16 +26,20 @@ class TRGSW():
             zero_trlwe_vector.append(zero_trlwe.cipher_vector)
         
         zero_trlwe_vector = np.array(zero_trlwe_vector)
-        
+        print(f"zero_telwe_vector:\n{zero_trlwe_vector}")
         mu_matrix = self.generate_mu_matrix(self.mu_vec, self.Bg, self.cipher_trlwe_length, self.l)
         self.cipher_vector = self.trgsw(zero_trlwe_vector, mu_matrix)
     
     def generate_mu_matrix(self, mu_vec, Bg, cipher_trlwe_length, l):
+        #print(f"mu:\n{mu_vec}")
         mu_vec_poly = self.convert_poly(mu_vec, self.n)
+        #print(f"mu_vec_poly:\n{mu_vec_poly}")
         mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu_vec_poly.shape[0]))
-        mu_Bg_array = np.array([mu_vec_poly / (Bg ** i) for i in range(1,l+1)])
+        mu_Bg_array = np.array([self.float_to_torus32(mu_vec_poly / (Bg ** i)) for i in range(1,l+1)])
         for i in range(cipher_trlwe_length):
             mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
+            
+        print(f"mu matrix:\n{mu_matrix}")
         return mu_matrix
     
     def trgsw(self, zero_trlwe, mu_matrix):
@@ -48,11 +52,24 @@ class TRGSW():
                 res[i] += plain_text[i]
                 
             else:
-                if i > len(plain_text):
+                if i >= len(plain_text):
                     res[i] += 0
                 else:
                     res[i-n] -= plain_text[i-len(plain_text)]
         return res
+    
+    def float_to_torus32(self, d):
+        return np.uint32((d % 1) * 2 ** 32)
+        """
+        R mod 1 の小数部分を32bitで表現したい。
+        →整数部分を押し出して、表現すればよい
+        1. ひとまず、modを取る
+        →この段階では、ただのfloat型
+        2. 型をuint32(符号なし32bit整数)に指定
+        3. modを取った数に2の32乗をかける。
+        →これで、整数部分に小数部分が押し出される。
+        4. 加算、乗算したときも、整数部分は押し出されて関係なくなるからOK
+        """
 
         
 class ExternalProduct():
@@ -67,7 +84,7 @@ class ExternalProduct():
         
     def exec(self):
         self.decomposed_trlwe = self.decompose_trlwe(self.cipher_trlwe, self.Bgbit, self.l)
-        self.encrypted_text = self.exec_calc(self.Bg, self.decomposed_trlwe, self.cipher_trgsw)
+        self.encrypted_text = self.exec_calc(self.decomposed_trlwe, self.cipher_trgsw)
     
     def decomposition(self, a, l, Bgbit):
         round_offset = 1 << (32 - l * Bgbit -1)
@@ -84,6 +101,9 @@ class ExternalProduct():
                 else:
                     decomposed_a[i][j] = decomposed_a_slip[i][j]
 
+        #print(f"decomposed_a {decomposed_a.shape}\n{decomposed_a}")
+        
+        #print(f"decomposed_a reshape {decomposed_a.reshape(1,l,len(a)).shape}\n{decomposed_a.reshape(1,l,len(a))}")
         return decomposed_a.reshape(1,l,len(a))
 
     def decompose_trlwe(self, cipher_trlwe, Bgbit, l):
@@ -93,17 +113,17 @@ class ExternalProduct():
 
         return np.array(decomposed_vector)
     
-    def exec_calc(self, Bg, decomposed_trlwe, trgsw):
+    def exec_calc(self, decomposed_trlwe, trgsw):
         trgsw_matrix = []
         for j in range(trgsw.shape[1]):
             trgsw_vector = np.empty((decomposed_trlwe.shape[2]))
             for i in range(decomposed_trlwe.shape[1]):
-                trgsw_vector += self.polymul(decomposed_trlwe.shape[2], decomposed_trlwe[0][i][:], self.convert_poly(trgsw[i][j], decomposed_trlwe.shape[2]))
+                trgsw_vector += self.polymul(decomposed_trlwe.shape[2], decomposed_trlwe[0, i, :], trgsw[i, j, :])
 
             trgsw_matrix.append(trgsw_vector)
-        
-        return np.array(trgsw_matrix)
-        
+        print(f"trgsw \n{np.uint32(np.array(trgsw_matrix))}")
+        return np.uint32(np.array(trgsw_matrix))
+
     def polymul(self, n, a, b):
         res = np.zeros(n, dtype=np.int64)
         for i in range(n):
@@ -138,6 +158,10 @@ class ExternalProduct():
 
 class CMUX():
     def __init__(self, ):
+        return 0
+    def exec(self):
+        trlwe_zero = TRLWE(0, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
+        trlwe_one = TRLWE(1, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
         return 0
     
 class TRLWE():
@@ -198,12 +222,12 @@ class TRLWE():
         plain_text_torus = []
         for i in plain_text:
             plain_text_torus.append(self.float_to_torus32(i))
-        np.array(plain_text_torus)
+        plain_text_torus = np.array(plain_text_torus)
         
         for i in range(k):
             public_secret_polymul += self.polymul(n, public_key[i], secret_key[i])             
 
-        cipher_text = self.float_to_torus32(public_secret_polymul) + plain_text + error
+        cipher_text = self.float_to_torus32(public_secret_polymul) + plain_text_torus + error
         cipher_vector = np.vstack((public_key, cipher_text))
 
         return cipher_vector
