@@ -26,20 +26,34 @@ class TRGSW():
             zero_trlwe_vector.append(zero_trlwe.cipher_vector)
         
         zero_trlwe_vector = np.array(zero_trlwe_vector)
-        print(zero_trlwe_vector.shape)
         
         mu_matrix = self.generate_mu_matrix(self.mu_vec, self.Bg, self.cipher_trlwe_length, self.l)
         self.cipher_vector = self.trgsw(zero_trlwe_vector, mu_matrix)
     
     def generate_mu_matrix(self, mu_vec, Bg, cipher_trlwe_length, l):
-        mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu_vec.shape[0]))
-        mu_Bg_array = np.array([mu_vec / (Bg ** i) for i in range(1,l+1)])
+        mu_vec_poly = self.convert_poly(mu_vec, self.n)
+        mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu_vec_poly.shape[0]))
+        mu_Bg_array = np.array([mu_vec_poly / (Bg ** i) for i in range(1,l+1)])
         for i in range(cipher_trlwe_length):
             mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
         return mu_matrix
     
     def trgsw(self, zero_trlwe, mu_matrix):
         return zero_trlwe + mu_matrix
+    
+    def convert_poly(self, plain_text, n): #与えられた多項式のX^n-1の剰余を取る & 次元が足りないときに0で補完する。
+        res = np.zeros(n, dtype = np.int64)
+        for i in range (n):
+            if i < len(plain_text):
+                res[i] += plain_text[i]
+                
+            else:
+                if i > len(plain_text):
+                    res[i] += 0
+                else:
+                    res[i-n] -= plain_text[i-len(plain_text)]
+        return res
+
         
 class ExternalProduct():
     def __init__(self, cipher_trlwe, cipher_trgsw, mu, Bgbit, l):
