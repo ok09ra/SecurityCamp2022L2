@@ -4,34 +4,50 @@ import sys
 import random
 import numpy as np
 
-class ExternalProduct():
-    def __init__(self, cipher_trlwe, mu, Bgbit, l, zero_mu, zero_n, zero_sigma, zero_k):
-        self.cipher_trlwe = cipher_trlwe
-        self.cipher_trlwe_length = cipher_trlwe.shape[0]
-        self.mu = np.array(mu)
+
+class TRGSW():
+    def __init__(self, mu_vec, Bgbit, l, mu, n, sigma, k):
+        self.cipher_trlwe_length = k+1
+        self.mu_vec = np.array(mu_vec)
         self.Bgbit = Bgbit
         self.Bg = 2 ** Bgbit
         self.l = l
 
-        self.zero_mu = zero_mu
-        self.zero_n = zero_n
-        self.zero_sigma = zero_sigma
-        self.zero_k = zero_k
+        self.mu = mu
+        self.n = n
+        self.sigma = sigma
+        self.k = k
+        
+    def exec(self):
+        zero_trlwe = TRLWE([0], self.mu, self.l, self.sigma, self.cipher_trlwe_length-1)
+        zero_trlwe.exec()
+        self.zero_trlwe_vector = np.array([zero_trlwe.cipher_vector.T for i in range(self.cipher_trlwe_length)]).reshape(self.l * self.cipher_trlwe_length, self.cipher_trlwe_length, 1)
+        self.mu_matrix = self.generate_mu_matrix(self.mu_vec, self.Bg, self.cipher_trlwe_length, self.l)
+        self.cipher_vector = self.trgsw(self.zero_trlwe_vector, self.mu_matrix)
+    
+    def generate_mu_matrix(self, mu_vec, Bg, cipher_trlwe_length, l):
+        mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu_vec.shape[0]))
+        mu_Bg_array = np.array([mu_vec / (Bg ** i) for i in range(1,l+1)])
+        for i in range(cipher_trlwe_length):
+            mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
+        return mu_matrix
+    
+    def trgsw(self, zero_trlwe, mu_matrix):
+        return zero_trlwe + mu_matrix
+        
+class ExternalProduct():
+    def __init__(self, cipher_trlwe, cipher_trgsw, mu, Bgbit, l):
+        self.cipher_trlwe = cipher_trlwe
+        self.cipher_trlwe_length = cipher_trlwe.shape[0]
+        self.cipher_trgsw = cipher_trgsw
+        self.mu = np.array(mu)
+        self.Bgbit = Bgbit
+        self.Bg = 2 ** Bgbit
+        self.l = l
         
     def exec(self):
         self.decomposed_trlwe = self.decompose_trlwe(self.cipher_trlwe, self.Bgbit, self.l)
-        zero_trlwe = TRLWE([0], self.zero_mu, self.l, self.zero_sigma, self.cipher_trlwe_length-1)
-        zero_trlwe.exec()
-        self.zero_trlwe_vector = np.array([zero_trlwe.cipher_vector.T for i in range(self.cipher_trlwe_length)]).reshape(self.l * self.cipher_trlwe_length, self.cipher_trlwe_length, 1)
-        print("-------------------")
-        print(f"zerp_trlwe:\n{self.zero_trlwe_vector}")
-        self.mu_matrix = self.generate_mu_matrix(self.mu, self.Bg, self.cipher_trlwe_length, self.l)
-        print("-------------------")
-        print(f"mu matrix:\n{self.mu_matrix}")
-        self.trgsw_matrix = self.trgsw(self.zero_trlwe_vector, self.mu_matrix)
-        print("-------------------")
-        print(f"trgsw:\n{self.trgsw_matrix}")
-        self.encrypted_text = self.exec_calc(self.Bg, self.decomposed_trlwe, self.trgsw_matrix)
+        self.encrypted_text = self.exec_calc(self.Bg, self.decomposed_trlwe, self.cipher_trgsw)
     
     def decomposition(self, a, l, Bgbit):
         round_offset = 1 << (32 - l * Bgbit -1)
@@ -56,16 +72,6 @@ class ExternalProduct():
             decomposed_vector = np.hstack([decomposed_vector, self.decomposition(cipher_torus_vector, l, Bgbit)])
 
         return np.array(decomposed_vector)
-
-    def generate_mu_matrix(self, mu, Bg, cipher_trlwe_length, l):
-        mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu.shape[0]))
-        mu_Bg_array = np.array([mu / (Bg ** i) for i in range(1,l+1)])
-        for i in range(cipher_trlwe_length):
-            mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
-        return mu_matrix
-    
-    def trgsw(self, zero_trlwe, mu_matrix):
-        return zero_trlwe + mu_matrix
     
     def exec_calc(self, Bg, decomposed_trlwe, trgsw):
         trgsw_matrix = []
@@ -103,12 +109,12 @@ class ExternalProduct():
                     res[i-n] -= plain_text[i-len(plain_text)]
         return res
 
-    def cmux(self, input):
+    def cmux(self, input_vec, ):
         trlwe_zero = TRLWE(0, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
         trlwe_one = TRLWE(1, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
         
         mu_matrix = self.generate_mu_matrix(input, self.Bg, self.cipher_trlwe_length, self.l)
-        return self.trgsw((trlwe_one.cipher_vector - trlwe_zero.cipher_vector), mu_matrix) + trlwe_zero.cipher_vector
+        return self.external_product((trlwe_one.cipher_vector - trlwe_zero.cipher_vector), mu_matrix) + trlwe_zero.cipher_vector
 
 class TRLWE():
     def __init__(self, plain_text, mu, n, sigma, k):
@@ -202,20 +208,24 @@ class TRLWE():
         return res
 
 def main():
-    mu = 2 ** -3
-    n = 586
+    mu = 2 ** -3 #TRLWE用のmu
+    n = 512
     sigma = 0.0000000342338787018369
     k = 2
-    plain_text = [0]
+    plain_text = [1]
 
-    mu_vec = [0]
+    mu_vec = [1] #External Productのかけられるベクトルmu
     Bgbit = 8
     l = 2
     trlwe = TRLWE(plain_text, mu, n, sigma, k)
     trlwe.exec()
     
-    external_product = ExternalProduct(trlwe.cipher_vector, mu_vec, Bgbit, l, mu, n, sigma, k)
+    trgsw = TRGSW(mu_vec, Bgbit,l, mu, n, sigma, k)
+    trgsw.exec()
+
+    external_product = ExternalProduct(trlwe.cipher_vector, trgsw.cipher_vector , mu, Bgbit, l)
     external_product.exec()
+
     decrypted_text = trlwe.decrypt_calc(external_product.encrypted_text, trlwe.secret_key, trlwe.k, trlwe.n)
     
     #print(f"secret key:\n{tlwe.secret_key}")
@@ -228,4 +238,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    for i in range(10):
+        main()
