@@ -20,11 +20,17 @@ class ExternalProduct():
         
     def exec(self):
         self.decomposed_trlwe = self.decompose_trlwe(self.cipher_trlwe, self.Bgbit, self.l)
-        zero_trlwe = TRLWE([0], self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length-1)
+        zero_trlwe = TRLWE([0], self.zero_mu, self.l, self.zero_sigma, self.cipher_trlwe_length-1)
         zero_trlwe.exec()
-        self.zero_trlwe_vector = zero_trlwe.cipher_vector
+        self.zero_trlwe_vector = np.array([zero_trlwe.cipher_vector.T for i in range(self.cipher_trlwe_length)]).reshape(self.l * self.cipher_trlwe_length, self.cipher_trlwe_length, 1)
+        print("-------------------")
+        print(f"zerp_trlwe:\n{self.zero_trlwe_vector}")
         self.mu_matrix = self.generate_mu_matrix(self.mu, self.Bg, self.cipher_trlwe_length, self.l)
+        print("-------------------")
+        print(f"mu matrix:\n{self.mu_matrix}")
         self.trgsw_matrix = self.trgsw(self.zero_trlwe_vector, self.mu_matrix)
+        print("-------------------")
+        print(f"trgsw:\n{self.trgsw_matrix}")
         self.encrypted_text = self.exec_calc(self.Bg, self.decomposed_trlwe, self.trgsw_matrix)
     
     def decomposition(self, a, l, Bgbit):
@@ -41,15 +47,16 @@ class ExternalProduct():
                     decomposed_a_slip[i-1][j] += 1
                 else:
                     decomposed_a[i][j] = decomposed_a_slip[i][j]
+
         return decomposed_a.reshape(1,l,len(a))
 
     def decompose_trlwe(self, cipher_trlwe, Bgbit, l):
         decomposed_vector = np.empty((1, 0, cipher_trlwe.shape[1]))
         for cipher_torus_vector in cipher_trlwe:
             decomposed_vector = np.hstack([decomposed_vector, self.decomposition(cipher_torus_vector, l, Bgbit)])
-        
+
         return np.array(decomposed_vector)
-        
+
     def generate_mu_matrix(self, mu, Bg, cipher_trlwe_length, l):
         mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu.shape[0]))
         mu_Bg_array = np.array([mu / (Bg ** i) for i in range(1,l+1)])
@@ -58,7 +65,7 @@ class ExternalProduct():
         return mu_matrix
     
     def trgsw(self, zero_trlwe, mu_matrix):
-        return zero_trlwe.T.reshape(zero_trlwe.shape[1],zero_trlwe.shape[0], 1) + mu_matrix
+        return zero_trlwe + mu_matrix
     
     def exec_calc(self, Bg, decomposed_trlwe, trgsw):
         trgsw_matrix = []
@@ -77,9 +84,9 @@ class ExternalProduct():
             for j in range(n):
                 #法はX^n+1だからmodを取ると、i(>=n)次元以上の次元の項は消えて、係数はi-n次元の係数から引く。
                 if i + j < n: #次元がnよりも小さい時
-                    res[i + j] += a[i] * b[j] #各次数の係数を順に足していく。
+                    res[i + j] += np.uint32(a[i]) * np.uint32(b[j]) #各次数の係数を順に足していく。
                 else: #次元がnよりも大きい時
-                    res[i + j - n] -= a[i] * b[j] #次元がn以上の時はk-n次元の係数に係数を引く。
+                    res[i + j - n] -= np.uint32(a[i]) * np.uint32(b[j]) #次元がn以上の時はk-n次元の係数に係数を引く。
         return res
 
 
@@ -199,9 +206,9 @@ def main():
     n = 586
     sigma = 0.0000000342338787018369
     k = 2
-    plain_text = [1]
+    plain_text = [0]
 
-    mu_vec = [1]
+    mu_vec = [0]
     Bgbit = 8
     l = 2
     trlwe = TRLWE(plain_text, mu, n, sigma, k)
