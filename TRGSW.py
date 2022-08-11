@@ -41,16 +41,15 @@ class ExternalProduct():
                     decomposed_a_slip[i-1][j] += 1
                 else:
                     decomposed_a[i][j] = decomposed_a_slip[i][j]
-
-        return decomposed_a
+        return decomposed_a.reshape(1,l,len(a))
 
     def decompose_trlwe(self, cipher_trlwe, Bgbit, l):
-        decomposed_vector = []
+        decomposed_vector = np.empty((1, 0, cipher_trlwe.shape[1]))
         for cipher_torus_vector in cipher_trlwe:
-            decomposed_vector.append(self.decomposition(cipher_torus_vector, l, Bgbit))
+            decomposed_vector = np.hstack([decomposed_vector, self.decomposition(cipher_torus_vector, l, Bgbit)])
         
         return np.array(decomposed_vector)
-
+        
     def generate_mu_matrix(self, mu, Bg, cipher_trlwe_length, l):
         mu_matrix = np.zeros(( l * cipher_trlwe_length, cipher_trlwe_length,  mu.shape[0]))
         mu_Bg_array = np.array([mu / (Bg ** i) for i in range(1,l+1)])
@@ -63,16 +62,14 @@ class ExternalProduct():
     
     def exec_calc(self, Bg, decomposed_trlwe, trgsw):
         trgsw_matrix = []
-        print(trgsw.shape)
-        for j in range(trgsw.shape[2]):
-            trgsw_vector = np.empty((decomposed_trlwe.shape[1]))
+        for j in range(trgsw.shape[1]):
+            trgsw_vector = np.empty((decomposed_trlwe.shape[2]))
             for i in range(decomposed_trlwe.shape[1]):
-                print(decomposed_trlwe[i].shape)
-                trgsw_vector += self.polymul(decomposed_trlwe.shape[1], decomposed_trlwe[i], trgsw[i][j])
+                trgsw_vector += self.polymul(decomposed_trlwe.shape[2], decomposed_trlwe[0][i][:], self.convert_poly(trgsw[i][j], decomposed_trlwe.shape[2]))
 
             trgsw_matrix.append(trgsw_vector)
         
-        return Bg * np.array(trgsw_matrix)
+        return np.array(trgsw_matrix)
         
     def polymul(self, n, a, b):
         res = np.zeros(n, dtype=np.int64)
@@ -83,6 +80,20 @@ class ExternalProduct():
                     res[i + j] += a[i] * b[j] #各次数の係数を順に足していく。
                 else: #次元がnよりも大きい時
                     res[i + j - n] -= a[i] * b[j] #次元がn以上の時はk-n次元の係数に係数を引く。
+        return res
+
+
+    def convert_poly(self, plain_text, n): #与えられた多項式のX^n-1の剰余を取る & 次元が足りないときに0で補完する。
+        res = np.zeros(n, dtype = np.int64)
+        for i in range (n):
+            if i < len(plain_text):
+                res[i] += plain_text[i]
+                
+            else:
+                if i > len(plain_text):
+                    res[i] += 0
+                else:
+                    res[i-n] -= plain_text[i-len(plain_text)]
         return res
 
     def cmux(self, input):
@@ -165,9 +176,9 @@ class TRLWE():
             for j in range(n):
                 #法はX^n+1だからmodを取ると、i(>=n)次元以上の次元の項は消えて、係数はi-n次元の係数から引く。
                 if i + j < n: #次元がnよりも小さい時
-                    res[i + j] += a[i] * b[j] #各次数の係数を順に足していく。
+                    res[i + j] += np.uint32(a[i]) * np.uint32(b[j]) #各次数の係数を順に足していく。
                 else: #次元がnよりも大きい時
-                    res[i + j - n] -= a[i] * b[j] #次元がn以上の時はk-n次元の係数に係数を引く。
+                    res[i + j - n] -= np.uint32(a[i]) * np.uint32(b[j]) #次元がn以上の時はk-n次元の係数に係数を引く。
         return res
 
     def convert_poly(self, plain_text, n): #与えられた多項式のX^n-1の剰余を取る & 次元が足りないときに0で補完する。
@@ -188,9 +199,9 @@ def main():
     n = 586
     sigma = 0.0000000342338787018369
     k = 2
-    plain_text = [0]
+    plain_text = [1]
 
-    mu_vec = [0]
+    mu_vec = [1]
     Bgbit = 8
     l = 2
     trlwe = TRLWE(plain_text, mu, n, sigma, k)
@@ -203,7 +214,8 @@ def main():
     #print(f"secret key:\n{tlwe.secret_key}")
     #print(f"error:\n{tlwe.error}")
     print(f"plain text:\n{trlwe.plain_text}")
-    print(f"decrypt text:\n{decrypted_text}")
+    print(f"mu: \n{mu_vec}")
+    print(f"decrypt text:\n{decrypted_text[:len(plain_text)]}")
 
     
 
