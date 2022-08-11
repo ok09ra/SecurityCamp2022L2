@@ -20,12 +20,13 @@ class TRGSW():
         
     def exec(self):
         zero_trlwe_vector = []
-        for i in range(self.cipher_trlwe_length):
-            zero_trlwe = TRLWE([0], self.mu, self.l, self.sigma, self.cipher_trlwe_length-1)
+        for i in range(self.l * (self.k+1)):
+            zero_trlwe = TRLWE([0], self.mu, self.n, self.sigma, self.k)
             zero_trlwe.exec_torus()
-            zero_trlwe_vector.append(zero_trlwe.cipher_vector.T)
+            zero_trlwe_vector.append(zero_trlwe.cipher_vector)
         
-        zero_trlwe_vector = np.array(zero_trlwe_vector).reshape(self.l * self.cipher_trlwe_length, self.cipher_trlwe_length, 1)
+        zero_trlwe_vector = np.array(zero_trlwe_vector)
+        print(zero_trlwe_vector.shape)
         
         mu_matrix = self.generate_mu_matrix(self.mu_vec, self.Bg, self.cipher_trlwe_length, self.l)
         self.cipher_vector = self.trgsw(zero_trlwe_vector, mu_matrix)
