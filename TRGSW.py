@@ -39,7 +39,7 @@ class TRGSW():
         for i in range(cipher_trlwe_length):
             mu_matrix[l * i: l * (i + 1),i,:] = mu_Bg_array
             
-        print(f"mu matrix:\n{np.uint32(mu_matrix)}")
+        #print(f"mu matrix:\n{np.uint32(mu_matrix)}")
         return np.uint32(mu_matrix)
     
     def trgsw(self, zero_trlwe, mu_matrix):
@@ -149,21 +149,30 @@ class ExternalProduct():
                     res[i-n] -= plain_text[i-len(plain_text)]
         return res
 
-    def cmux(self, input_vec, ):
-        trlwe_zero = TRLWE(0, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
-        trlwe_one = TRLWE(1, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
-        
-        mu_matrix = self.generate_mu_matrix(input, self.Bg, self.cipher_trlwe_length, self.l)
-        return self.external_product((trlwe_one.cipher_vector - trlwe_zero.cipher_vector), mu_matrix) + trlwe_zero.cipher_vector
+
 
 class CMUX():
-    def __init__(self, ):
-        return 0
+    def __init__(self, cipher_trgsw, mu, k, sigma, n, Bgbit, l):
+        self.cipher_trgsw = cipher_trgsw
+        self.mu = mu
+        self.k = k
+        self.sigma = sigma
+        self.n = n
+        self.Bgbit = Bgbit
+        self.l = l
+        
     def exec(self):
-        trlwe_zero = TRLWE(0, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
-        trlwe_one = TRLWE(1, self.zero_mu, self.l * self.cipher_trlwe_length, self.zero_sigma, self.cipher_trlwe_length)
-        return 0
-    
+        trlwe_zero = TRLWE([0], self.mu, self.n, self.sigma, self.k)
+        trlwe_one = TRLWE([1], self.mu, self.n, self.sigma, self.k)
+        trlwe_zero.exec()
+        trlwe_one.exec()
+        
+        external_product = ExternalProduct(np.uint32(trlwe_one.cipher_vector - trlwe_zero.cipher_vector), self.cipher_trgsw, self.mu, self.Bgbit, self.l)
+        external_product.exec()
+        
+        self.result = external_product.encrypted_text + trlwe_zero.cipher_vector
+        
+
 class TRLWE():
     def __init__(self, plain_text, mu, n, sigma, k):
         self.plain_text = np.array(plain_text)
@@ -291,6 +300,10 @@ def main():
     mu_vec = [1] #External Productのかけられるベクトルmu
     Bgbit = 8
     l = 2
+    
+    input_vec = [1]
+    
+    """
     trlwe = TRLWE(plain_text, mu, n, sigma, k)
     trlwe.exec()
     
@@ -307,10 +320,16 @@ def main():
     print(f"plain text:\n{trlwe.plain_text}")
     print(f"mu: \n{mu_vec}")
     print(f"decrypt text:\n{decrypted_text[:len(plain_text)]}")
+    """
+    trgsw_for_cmux = TRGSW(input_vec, Bgbit,l, mu, n, sigma, k)
+    trgsw_for_cmux.exec()
+    
+    cmux = CMUX(trgsw_for_cmux.cipher_vector, mu, k, sigma, n, Bgbit, l)
+    cmux.exec()
+    print(f"CMUX result:\n{cmux.result}")
 
     
 
 
 if __name__ == '__main__':
-    for i in range(10):
-        main()
+    main()
